@@ -84,10 +84,16 @@ namespace CsvFormatter
 
         static void DoAddProperty(dynamic outputRecord, string propertyName, string propertyValue)
         {
-            //TODO: null checking here
+            //TODO: null checking, weird underscore position checking, etc.
 
             if (propertyName.Contains("_"))
             {
+                var parentPropertyName = propertyName.Split('_')[0];
+                var childPropertyName = propertyName.Split('_')[1];
+                if(!((IDictionary<string, object>)outputRecord).ContainsKey(parentPropertyName)) {
+                    ((IDictionary<string, object>)outputRecord)[parentPropertyName] = new ExpandoObject();
+                }
+                DoAddProperty(((IDictionary<string, object>)outputRecord)[parentPropertyName], childPropertyName, propertyValue);
             }
             else
             {
