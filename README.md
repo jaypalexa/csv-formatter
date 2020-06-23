@@ -28,3 +28,7 @@ should convert to
   }
 }
 ```
+
+## Dev notes
+* [Generically Flatten JSON using C#](https://stackoverflow.com/questions/32782937/generically-flatten-json-using-c-sharp)
+* [CsvHelper - Export DataTable to CSV](https://github.com/JoshClose/CsvHelper/issues/1399)
