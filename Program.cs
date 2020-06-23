@@ -1,14 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Dynamic;
-using System.Globalization;
 using System.IO;
-using System.Xml.Linq;
-using CsvHelper;
+using CsvFormatter.DataImporters;
 using CsvFormatter.Enums;
-using Newtonsoft.Json;
-using System.ComponentModel.DataAnnotations;
 using CsvFormatter.OutputBuilders;
 
 namespace CsvFormatter
@@ -17,37 +10,37 @@ namespace CsvFormatter
     {
         static void Main(string[] args)
         {
+            //TODO: converting back to CSV from other XML or JSON -- get data into a standard format (e.g., DataTable) and manipulate it "generically"
+            //TODO: converting between XML and JSON -- get data into a standard format (e.g., DataTable) and manipulate it "generically"
+            //TODO: input from a different source, e.g. a database -- stubbed out in DatabaseDataImporter.cs
+
             try
             {
-                //TODO: FUTURE:  support input from database as well as from CSV file
+                //TODO: FUTURE: support input from database as well as from CSV file
                 var inputSource = InputSource.CsvFile;
+                var dataImporterFactory = new DataImporterFactory(inputSource);
+                var dataImporter = dataImporterFactory.Create();
+                var records = dataImporter.Import();
 
-                var records = inputSource switch
-                {
-                    InputSource.CsvFile => ImportFromCsvFile(),
-                    InputSource.Database => ImportFromDatabase(),
-                    _ => throw new NotSupportedException($"Input source '{inputSource}' not supported")
-                };
+                //TODO: put prompts in a loop in case input is not valid
 
-                //TODO: put this prompt in a loop in case input is not valid
                 Console.WriteLine(string.Empty);
                 Console.WriteLine("Enter 1 to format output as JSON");
                 Console.WriteLine("Enter 2 to format output as XML");
                 var outputFormatAsString = Console.ReadLine();
 
-                //TODO: sanitize/validate input to make sure it is valid, is within enum range, etc.
-                var outputFormat = GetOutputFormat(outputFormatAsString);
-
+                var outputFormat = CsvParserHelper.GetOutputFormat(outputFormatAsString);
                 var outputBuilderFactory = new OutputBuilderFactory(outputFormat);
                 var outputBuilder = outputBuilderFactory.Create();
                 var outputAsString = outputBuilder.Build(records);
 
+                //TODO: more options for user to specify output file location/name, default to input folder, etc.
                 Console.WriteLine(string.Empty);
                 Console.WriteLine("Enter output file folder:");
                 var outputFilePath = Console.ReadLine();
-                var fullOutputPathAndFileName = Path.Combine(outputFilePath, $"records.{DateTime.Now:yyyyMMddHHmmss}.{outputFormat.ToString().ToLower()}");
 
                 //TODO: add guard rails for output path location, permissions, overwrite, etc.
+                var fullOutputPathAndFileName = Path.Combine(outputFilePath, $"records.{DateTime.Now:yyyyMMddHHmmss}.{outputFormat.ToString().ToLower()}");
                 File.WriteAllText(fullOutputPathAndFileName, outputAsString);
 
                 Console.WriteLine(string.Empty);
@@ -59,50 +52,5 @@ namespace CsvFormatter
                 Console.WriteLine($"ERROR: {ex}");
             }
         }
-
-        private static OutputFormat GetOutputFormat(string outputFormatAsString)
-        {
-            if (Enum.TryParse(outputFormatAsString, true, out OutputFormat outputFormat))
-            {
-                if (Enum.IsDefined(typeof(OutputFormat), outputFormat))
-                {
-                    return outputFormat;
-                }
-                else
-                {
-                    throw new InvalidOperationException($"{outputFormatAsString} is not an underlying value of the {nameof(OutputFormat)} enumeration.");
-                }
-            }
-            else
-            {
-                throw new InvalidOperationException($"{outputFormatAsString} is not a member of the {nameof(OutputFormat)} enumeration.");
-            }
-        }
-
-        private static List<ExpandoObject> ImportFromCsvFile()
-        {
-            var records = new List<ExpandoObject>();
-
-            Console.WriteLine("Enter CSV input file name:");
-            var fullInputPathAndFileName = Console.ReadLine();
-            //TODO: sanitize/validate file name, validate that it is a CSV file, etc.
-
-            using (var streamReader = new StreamReader(fullInputPathAndFileName))
-            using (var csvReader = new CsvReader(streamReader, CultureInfo.InvariantCulture))
-            using (var csvDataReader = new CsvDataReader(csvReader))
-            {
-                var dataTable = new DataTable();
-                dataTable.Load(csvDataReader);
-                records = CsvParserHelper.Parse(dataTable);
-            }
-
-            return records;
-        }
-
-        private static List<ExpandoObject> ImportFromDatabase()
-        {
-            throw new NotImplementedException("TODO:  ImportFromDatabase");
-        }
-
     }
 }
