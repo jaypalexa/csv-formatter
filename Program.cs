@@ -1,4 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Dynamic;
+using System.Globalization;
+using System.IO;
+using CsvHelper;
 
 namespace CsvFormatter
 {
@@ -27,6 +32,7 @@ namespace CsvFormatter
 
             if (outputFormatAsString.Equals("0")) return;
 
+            //TODO: refactor this into its own method
             if (Enum.TryParse(outputFormatAsString, true, out OutputFormatType outputFormatType))
             {
                 if (Enum.IsDefined(typeof(OutputFormatType), outputFormatType))
@@ -45,6 +51,54 @@ namespace CsvFormatter
                 return;
             }
 
+            using (var reader = new StreamReader(csvInputFileName))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            {
+                //var records = new List<Foo>();
+                csv.Read();
+                csv.ReadHeader();
+                var headers = csv.Context.HeaderRecord;
+
+                while (csv.Read())
+                {
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        Console.WriteLine($"Header: {headers[i]}; Value: {csv.GetField(i)}");
+                    }
+                    //var record = new Foo
+                    //{
+                    //    Id = csv.GetField<int>("Id"),
+                    //    Name = csv.GetField("Name")
+                    //};
+                    //records.Add(record);
+                }
+            }
+
+            //dynamic dynObject = new ExpandoObject();
+
+            //// name,address_line1,address_line2,description,reason,another_thing1,another_thing2
+            //var headers = "name,address_line1,address_line2,description,reason,another_thing1,another_thing2";
+            //var headerArray = headers.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            //foreach (var header in headerArray)
+            //{
+            //    Console.WriteLine(header);
+            //    DoAddProperty(dynObject, header);
+            //}
+
+
+        }
+
+        static void DoAddProperty(dynamic dynObject, string propertyName)
+        {
+            //TODO:  null checking here
+
+            if (propertyName.Contains("_"))
+            {
+            }
+            else
+            {
+
+            }
         }
     }
 }
