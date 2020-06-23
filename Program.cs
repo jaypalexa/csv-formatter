@@ -4,6 +4,7 @@ using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using CsvHelper;
+using Newtonsoft.Json;
 
 namespace CsvFormatter
 {
@@ -18,10 +19,12 @@ namespace CsvFormatter
         static void Main(string[] args)
         {
             Console.WriteLine("Enter CSV input file name:");
-            var csvInputFileName = Console.ReadLine();
+            var fullInputPathAndFileName = Console.ReadLine();
             //TODO: sanitize/validate file name, validate that it is a CSV file, etc.
 
-            Console.WriteLine($"You entered: {csvInputFileName}");
+            Console.WriteLine($"You entered: {fullInputPathAndFileName}");
+            var inputPath = Path.GetDirectoryName(fullInputPathAndFileName);
+            var inputFileName = Path.GetFileName(fullInputPathAndFileName);
 
             //TODO: put this prompt in a loop in case input is not valid
             Console.WriteLine("Enter 1 to format output as JSON");
@@ -51,53 +54,44 @@ namespace CsvFormatter
                 return;
             }
 
-            using (var reader = new StreamReader(csvInputFileName))
+            var outputRecords = new List<ExpandoObject>();
+
+            using (var reader = new StreamReader(fullInputPathAndFileName))
             using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
-                //var records = new List<Foo>();
+                //TODO: safety checking around header values, file length, mismatched columns, etc.
                 csv.Read();
                 csv.ReadHeader();
                 var headers = csv.Context.HeaderRecord;
 
                 while (csv.Read())
                 {
+                    dynamic outputRecord = new ExpandoObject();
                     for (int i = 0; i < headers.Length; i++)
                     {
                         Console.WriteLine($"Header: {headers[i]}; Value: {csv.GetField(i)}");
+                        DoAddProperty(outputRecord, headers[i], csv.GetField(i));
                     }
-                    //var record = new Foo
-                    //{
-                    //    Id = csv.GetField<int>("Id"),
-                    //    Name = csv.GetField("Name")
-                    //};
-                    //records.Add(record);
+                    outputRecords.Add(outputRecord);
                 }
             }
 
-            //dynamic dynObject = new ExpandoObject();
-
-            //// name,address_line1,address_line2,description,reason,another_thing1,another_thing2
-            //var headers = "name,address_line1,address_line2,description,reason,another_thing1,another_thing2";
-            //var headerArray = headers.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-            //foreach (var header in headerArray)
-            //{
-            //    Console.WriteLine(header);
-            //    DoAddProperty(dynObject, header);
-            //}
-
-
+            var outputJson = JsonConvert.SerializeObject(outputRecords);
+            var fullOutputPathAndFileName = Path.Combine(inputPath, $"{inputFileName}.{DateTime.Now:yyyyMMddHHmmss}.{outputFormatType.ToString().ToLower()}");
+            File.WriteAllText(fullOutputPathAndFileName, outputJson);
+            Console.WriteLine($"Output file written to: {fullOutputPathAndFileName}");
         }
 
-        static void DoAddProperty(dynamic dynObject, string propertyName)
+        static void DoAddProperty(dynamic outputRecord, string propertyName, string propertyValue)
         {
-            //TODO:  null checking here
+            //TODO: null checking here
 
             if (propertyName.Contains("_"))
             {
             }
             else
             {
-
+                ((IDictionary<string, object>)outputRecord)[propertyName] = propertyValue;
             }
         }
     }
