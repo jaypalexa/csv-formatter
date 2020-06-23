@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using System.Dynamic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Xml.Linq;
 using CsvHelper;
 using Newtonsoft.Json;
 
@@ -76,9 +80,23 @@ namespace CsvFormatter
                 }
             }
 
-            var outputJson = JsonConvert.SerializeObject(outputRecords);
             var fullOutputPathAndFileName = Path.Combine(inputPath, $"{inputFileName}.{DateTime.Now:yyyyMMddHHmmss}.{outputFormatType.ToString().ToLower()}");
-            File.WriteAllText(fullOutputPathAndFileName, outputJson);
+
+            //TODO: make this a switch statemtn
+            if (outputFormatType == OutputFormatType.Json)
+            {
+                var outputJson = JsonConvert.SerializeObject(outputRecords);
+                File.WriteAllText(fullOutputPathAndFileName, outputJson);
+            }
+            else if (outputFormatType == OutputFormatType.Xml)
+            {
+                var outputJson = JsonConvert.SerializeObject(outputRecords);
+                XNode node = JsonConvert.DeserializeXNode($"{{\"Root\":{outputJson}}}", "Root");
+
+                Console.WriteLine(node.ToString());
+                File.WriteAllText(fullOutputPathAndFileName, node.ToString());
+            }
+
             Console.WriteLine($"Output file written to: {fullOutputPathAndFileName}");
         }
 
@@ -90,7 +108,8 @@ namespace CsvFormatter
             {
                 var parentPropertyName = propertyName.Split('_')[0];
                 var childPropertyName = propertyName.Split('_')[1];
-                if(!((IDictionary<string, object>)outputRecord).ContainsKey(parentPropertyName)) {
+                if (!((IDictionary<string, object>)outputRecord).ContainsKey(parentPropertyName))
+                {
                     ((IDictionary<string, object>)outputRecord)[parentPropertyName] = new ExpandoObject();
                 }
                 DoAddProperty(((IDictionary<string, object>)outputRecord)[parentPropertyName], childPropertyName, propertyValue);
