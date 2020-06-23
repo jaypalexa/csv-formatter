@@ -1,123 +1,108 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Dynamic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Text;
 using System.Xml.Linq;
 using CsvHelper;
+using CsvFormatter.Enums;
 using Newtonsoft.Json;
+using System.ComponentModel.DataAnnotations;
+using CsvFormatter.OutputBuilders;
 
 namespace CsvFormatter
 {
-    enum OutputFormatType
-    {
-        Json = 1,
-        Xml = 2
-    }
-
     class Program
     {
         static void Main(string[] args)
         {
+            try
+            {
+                //TODO: FUTURE:  support input from database as well as from CSV file
+                var inputSource = InputSource.CsvFile;
+
+                var records = inputSource switch
+                {
+                    InputSource.CsvFile => ImportFromCsvFile(),
+                    InputSource.Database => ImportFromDatabase(),
+                    _ => throw new NotSupportedException($"Input source '{inputSource}' not supported")
+                };
+
+                //TODO: put this prompt in a loop in case input is not valid
+                Console.WriteLine(string.Empty);
+                Console.WriteLine("Enter 1 to format output as JSON");
+                Console.WriteLine("Enter 2 to format output as XML");
+                var outputFormatAsString = Console.ReadLine();
+
+                //TODO: sanitize/validate input to make sure it is valid, is within enum range, etc.
+                var outputFormat = GetOutputFormat(outputFormatAsString);
+
+                var outputBuilderFactory = new OutputBuilderFactory(outputFormat);
+                var outputBuilder = outputBuilderFactory.Create();
+                var outputAsString = outputBuilder.Build(records);
+
+                Console.WriteLine(string.Empty);
+                Console.WriteLine("Enter output file folder:");
+                var outputFilePath = Console.ReadLine();
+                var fullOutputPathAndFileName = Path.Combine(outputFilePath, $"records.{DateTime.Now:yyyyMMddHHmmss}.{outputFormat.ToString().ToLower()}");
+
+                //TODO: add guard rails for output path location, permissions, overwrite, etc.
+                File.WriteAllText(fullOutputPathAndFileName, outputAsString);
+
+                Console.WriteLine(string.Empty);
+                Console.WriteLine($"Output file written to: {fullOutputPathAndFileName}");
+            }
+            catch (Exception ex)
+            {
+                //TODO: nicer exception handling for the user
+                Console.WriteLine($"ERROR: {ex}");
+            }
+        }
+
+        private static OutputFormat GetOutputFormat(string outputFormatAsString)
+        {
+            if (Enum.TryParse(outputFormatAsString, true, out OutputFormat outputFormat))
+            {
+                if (Enum.IsDefined(typeof(OutputFormat), outputFormat))
+                {
+                    return outputFormat;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"{outputFormatAsString} is not an underlying value of the {nameof(OutputFormat)} enumeration.");
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException($"{outputFormatAsString} is not a member of the {nameof(OutputFormat)} enumeration.");
+            }
+        }
+
+        private static List<ExpandoObject> ImportFromCsvFile()
+        {
+            var records = new List<ExpandoObject>();
+
             Console.WriteLine("Enter CSV input file name:");
             var fullInputPathAndFileName = Console.ReadLine();
             //TODO: sanitize/validate file name, validate that it is a CSV file, etc.
 
-            Console.WriteLine($"You entered: {fullInputPathAndFileName}");
-            var inputPath = Path.GetDirectoryName(fullInputPathAndFileName);
-            var inputFileName = Path.GetFileName(fullInputPathAndFileName);
-
-            //TODO: put this prompt in a loop in case input is not valid
-            Console.WriteLine("Enter 1 to format output as JSON");
-            Console.WriteLine("Enter 2 to format output as XML");
-            Console.WriteLine("Enter 0 to quit");
-            var outputFormatAsString = Console.ReadLine();
-            //TODO: sanitize/validate input to make sure it is 0 or 1 or 2 only, is within enum range, etc.
-
-            if (outputFormatAsString.Equals("0")) return;
-
-            //TODO: refactor this into its own method
-            if (Enum.TryParse(outputFormatAsString, true, out OutputFormatType outputFormatType))
+            using (var streamReader = new StreamReader(fullInputPathAndFileName))
+            using (var csvReader = new CsvReader(streamReader, CultureInfo.InvariantCulture))
+            using (var csvDataReader = new CsvDataReader(csvReader))
             {
-                if (Enum.IsDefined(typeof(OutputFormatType), outputFormatType))
-                {
-                    Console.WriteLine($"Converted '{outputFormatAsString}' to {outputFormatType}.");
-                }
-                else
-                {
-                    Console.WriteLine($"{outputFormatAsString} is not an underlying value of the {nameof(OutputFormatType)} enumeration.");
-                    return;
-                }
-            }
-            else
-            {
-                Console.WriteLine($"{outputFormatAsString} is not a member of the {nameof(OutputFormatType)} enumeration.");
-                return;
+                var dataTable = new DataTable();
+                dataTable.Load(csvDataReader);
+                records = CsvParserHelper.Parse(dataTable);
             }
 
-            var outputRecords = new List<ExpandoObject>();
-
-            using (var reader = new StreamReader(fullInputPathAndFileName))
-            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-            {
-                //TODO: safety checking around header values, file length, mismatched columns, etc.
-                csv.Read();
-                csv.ReadHeader();
-                var headers = csv.Context.HeaderRecord;
-
-                while (csv.Read())
-                {
-                    dynamic outputRecord = new ExpandoObject();
-                    for (int i = 0; i < headers.Length; i++)
-                    {
-                        Console.WriteLine($"Header: {headers[i]}; Value: {csv.GetField(i)}");
-                        DoAddProperty(outputRecord, headers[i], csv.GetField(i));
-                    }
-                    outputRecords.Add(outputRecord);
-                }
-            }
-
-            var fullOutputPathAndFileName = Path.Combine(inputPath, $"{inputFileName}.{DateTime.Now:yyyyMMddHHmmss}.{outputFormatType.ToString().ToLower()}");
-
-            //TODO: make this a switch statemtn
-            if (outputFormatType == OutputFormatType.Json)
-            {
-                var outputJson = JsonConvert.SerializeObject(outputRecords);
-                File.WriteAllText(fullOutputPathAndFileName, outputJson);
-            }
-            else if (outputFormatType == OutputFormatType.Xml)
-            {
-                var outputJson = JsonConvert.SerializeObject(outputRecords);
-                XNode node = JsonConvert.DeserializeXNode($"{{\"Root\":{outputJson}}}", "Root");
-
-                Console.WriteLine(node.ToString());
-                File.WriteAllText(fullOutputPathAndFileName, node.ToString());
-            }
-
-            Console.WriteLine($"Output file written to: {fullOutputPathAndFileName}");
+            return records;
         }
 
-        static void DoAddProperty(dynamic outputRecord, string propertyName, string propertyValue)
+        private static List<ExpandoObject> ImportFromDatabase()
         {
-            //TODO: null checking, weird underscore position checking, etc.
-
-            if (propertyName.Contains("_"))
-            {
-                var parentPropertyName = propertyName.Split('_')[0];
-                var childPropertyName = propertyName.Split('_')[1];
-                if (!((IDictionary<string, object>)outputRecord).ContainsKey(parentPropertyName))
-                {
-                    ((IDictionary<string, object>)outputRecord)[parentPropertyName] = new ExpandoObject();
-                }
-                DoAddProperty(((IDictionary<string, object>)outputRecord)[parentPropertyName], childPropertyName, propertyValue);
-            }
-            else
-            {
-                ((IDictionary<string, object>)outputRecord)[propertyName] = propertyValue;
-            }
+            throw new NotImplementedException("TODO:  ImportFromDatabase");
         }
+
     }
 }
